@@ -1,6 +1,6 @@
 /**
  * proxy.js
- * Minimal CORS proxy for ososedki-api.browser.js
+ * Minimal CORS proxy for api.mjs
  *
  * Usage:
  *   node proxy.js          # runs on port 3000
