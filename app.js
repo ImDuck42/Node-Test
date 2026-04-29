@@ -1,37 +1,43 @@
 import { createClient, OsosedkiError } from './api.mjs';
 
-const PROXY_HOSTS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const PROXY_HOSTS         = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 const PROXY_CHECK_TIMEOUT = 2500;
-const TARGET_ORIGIN = 'https://ososedki.com';
+const TARGET_ORIGIN       = 'https://ososedki.com';
 
 class App {
   constructor() {
-    this.api = createClient();
+    this.api = createClient({
+      baseUrl:          TARGET_ORIGIN,
+      retries:          3,
+      retryDelayMs:     500,
+      probeConcurrency: 20,
+    });
+
     this.proxyUrl = null;
 
-    this.galleryImages = [];
-    this.currentImageIndex = 0;
+    this.galleryImages       = [];
+    this.currentImageIndex   = 0;
     this.currentGalleryTitle = '';
 
-    this.listState = { type: null, page: 1, hasMore: false, loading: false, params: {} };
-    this.sentinel = null;
+    this.listState        = { type: null, page: 1, hasMore: false, loading: false, params: {} };
+    this.sentinel         = null;
     this.sentinelObserver = null;
 
-    this.scrollPositions = new Map();
+    this.scrollPositions    = new Map();
     this.searchDebounceTimer = null;
 
-    this.appEl = document.getElementById('app');
-    this.breadcrumbEl = document.getElementById('breadcrumb');
-    this.backToTop = document.getElementById('backToTop');
+    this.appEl          = document.getElementById('app');
+    this.breadcrumbEl   = document.getElementById('breadcrumb');
+    this.backToTop      = document.getElementById('backToTop');
     this.toastContainer = document.getElementById('toastContainer');
 
-    this.lightbox = document.getElementById('lightbox');
-    this.lightboxImg = document.getElementById('lightboxImg');
-    this.lightboxClose = document.getElementById('lightboxClose');
-    this.lightboxPrev = document.getElementById('lightboxPrev');
-    this.lightboxNext = document.getElementById('lightboxNext');
+    this.lightbox        = document.getElementById('lightbox');
+    this.lightboxImg     = document.getElementById('lightboxImg');
+    this.lightboxClose   = document.getElementById('lightboxClose');
+    this.lightboxPrev    = document.getElementById('lightboxPrev');
+    this.lightboxNext    = document.getElementById('lightboxNext');
     this.lightboxCounter = document.getElementById('lightboxCounter');
-    this.lightboxCopy = document.getElementById('lightboxCopy');
+    this.lightboxCopy    = document.getElementById('lightboxCopy');
 
     this.init();
   }
@@ -48,10 +54,10 @@ class App {
   async detectProxy() {
     for (const host of PROXY_HOSTS) {
       try {
-        const ctrl = new AbortController();
+        const ctrl  = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), PROXY_CHECK_TIMEOUT);
         const testUrl = `${host}/proxy?url=${encodeURIComponent(`${TARGET_ORIGIN}/`)}`;
-        const res = await fetch(testUrl, { method: 'HEAD', signal: ctrl.signal });
+        const res   = await fetch(testUrl, { method: 'HEAD', signal: ctrl.signal });
         clearTimeout(timer);
 
         if (res.ok || res.status === 404) {
@@ -69,7 +75,7 @@ class App {
 
   patchFetch() {
     const originalFetch = window.fetch;
-    const proxyBase = this.proxyUrl;
+    const proxyBase     = this.proxyUrl;
 
     window.fetch = (input, init = {}) => {
       const url = typeof input === 'string' ? input : input.url;
@@ -92,7 +98,7 @@ class App {
   /* ─── Router ─────────────────────────────────────────────────────────────── */
 
   parseHash() {
-    const raw = window.location.hash.slice(1) || '/';
+    const raw        = window.location.hash.slice(1) || '/';
     const [path, qs] = raw.split('?');
     return { path, params: new URLSearchParams(qs || '') };
   }
@@ -117,16 +123,16 @@ class App {
     this.updateBreadcrumb(path, params);
 
     const routes = [
-      { match: /^\/$|^\/home$/, handler: () => this.homeView() },
-      { match: /^\/search$/, handler: () => {
+      { match: /^\/$|^\/home$/,      handler: ()  => this.homeView() },
+      { match: /^\/search$/,         handler: ()  => {
         const q = params.get('q');
         return q ? this.searchView(q) : this.homeView();
       }},
-      { match: /^\/cosplays$/, handler: () => this.cosplaysView() },
-      { match: /^\/cosplay\/(.+)$/, handler: m => this.characterView(decodeURIComponent(m[1])) },
-      { match: /^\/model\/(.+)$/, handler: m => this.modelView(decodeURIComponent(m[1])) },
-      { match: /^\/fandom\/(.+)$/, handler: m => this.fandomView(decodeURIComponent(m[1])) },
-      { match: /^\/gallery\/(.+)$/, handler: m => this.galleryView(decodeURIComponent(m[1])) },
+      { match: /^\/cosplays$/,       handler: ()  => this.cosplaysView() },
+      { match: /^\/cosplay\/(.+)$/,  handler: m   => this.characterView(decodeURIComponent(m[1])) },
+      { match: /^\/model\/(.+)$/,    handler: m   => this.modelView(decodeURIComponent(m[1])) },
+      { match: /^\/fandom\/(.+)$/,   handler: m   => this.fandomView(decodeURIComponent(m[1])) },
+      { match: /^\/gallery\/(.+)$/,  handler: m   => this.galleryView(decodeURIComponent(m[1])) },
     ];
 
     const route = routes.find(r => r.match.test(path));
@@ -179,13 +185,6 @@ class App {
 
     const searchInput = document.getElementById('searchInput');
 
-    searchInput.addEventListener('input', e => {
-      clearTimeout(this.searchDebounceTimer);
-      const q = e.target.value.trim();
-      if (!q) return;
-      this.searchDebounceTimer = setTimeout(() => this.setHash('/search', { q, page: 1 }), 400);
-    });
-
     document.getElementById('searchForm').addEventListener('submit', e => {
       e.preventDefault();
       clearTimeout(this.searchDebounceTimer);
@@ -215,10 +214,10 @@ class App {
       if (dlBtn) {
         e.stopPropagation();
         const parentCell = dlBtn.closest('.image-cell');
-        const idx = parseInt(parentCell.dataset.idx, 10);
-        const url = this.galleryImages[idx];
+        const idx        = parseInt(parentCell.dataset.idx, 10);
+        const url        = this.galleryImages[idx];
         if (!url) return;
-        const ext = url.split('.').pop().split('?')[0] || 'jpg';
+        const ext      = url.split('.').pop().split('?')[0] || 'jpg';
         const safeName = (this.currentGalleryTitle || 'image').replace(/[^a-z0-9]/gi, '_').substring(0, 40);
         this.downloadImage(url, `${safeName}_${String(idx + 1).padStart(3, '0')}.${ext}`);
         return;
@@ -232,9 +231,9 @@ class App {
     });
 
     this.lightboxClose.addEventListener('click', () => this.closeLightbox());
-    this.lightboxCopy.addEventListener('click', e => { e.stopPropagation(); this.copyLightboxUrl(); });
-    this.lightboxPrev.addEventListener('click', e => { e.stopPropagation(); this.prevImage(); });
-    this.lightboxNext.addEventListener('click', e => { e.stopPropagation(); this.nextImage(); });
+    this.lightboxCopy.addEventListener('click',  e => { e.stopPropagation(); this.copyLightboxUrl(); });
+    this.lightboxPrev.addEventListener('click',  e => { e.stopPropagation(); this.prevImage(); });
+    this.lightboxNext.addEventListener('click',  e => { e.stopPropagation(); this.nextImage(); });
 
     this.lightbox.addEventListener('click', e => {
       if (e.target === this.lightbox || e.target.classList.contains('lightbox-backdrop')) {
@@ -244,8 +243,8 @@ class App {
 
     document.addEventListener('keydown', e => {
       if (!this.lightbox.classList.contains('active')) return;
-      if (e.key === 'Escape') this.closeLightbox();
-      if (e.key === 'ArrowLeft') this.prevImage();
+      if (e.key === 'Escape')     this.closeLightbox();
+      if (e.key === 'ArrowLeft')  this.prevImage();
       if (e.key === 'ArrowRight') this.nextImage();
     });
 
@@ -291,7 +290,7 @@ class App {
 
   restoreScrollPosition() {
     const { path } = this.parseHash();
-    const saved = this.scrollPositions.get(path);
+    const saved    = this.scrollPositions.get(path);
     if (saved != null) {
       setTimeout(() => window.scrollTo({ top: saved, behavior: 'instant' }), 0);
       this.scrollPositions.delete(path);
@@ -304,13 +303,13 @@ class App {
     this.sentinelObserver?.disconnect();
     this.sentinelObserver = null;
     this.sentinel?.remove();
-    this.sentinel = null;
+    this.sentinel  = null;
     this.listState = { type: null, page: 1, hasMore: false, loading: false, params: {} };
   }
 
   setupInfiniteScroll() {
     this.sentinel?.remove();
-    this.sentinel = document.createElement('div');
+    this.sentinel           = document.createElement('div');
     this.sentinel.className = 'load-sentinel';
     this.sentinel.innerHTML = '<div class="sentinel-spinner"></div><span>Loading more...</span>';
     this.appEl.appendChild(this.sentinel);
@@ -327,7 +326,7 @@ class App {
   setSentinelLoading() {
     if (!this.sentinel) return;
     this.sentinel.innerHTML = '<div class="sentinel-spinner"></div><span>Loading more...</span>';
-    this.sentinel.classList.remove('end');
+    this.sentinel.classList.remove('end', 'error');
   }
 
   setSentinelEnd() {
@@ -338,7 +337,20 @@ class App {
 
   setSentinelError() {
     if (!this.sentinel) return;
-    this.sentinel.innerHTML = '<span style="color:var(--danger)">Failed to load more</span>';
+    // Disconnect so the observer doesn't immediately fire again on the next
+    // scroll tick. The user can manually retry via the button.
+    this.sentinelObserver?.disconnect();
+    this.sentinel.classList.add('error');
+    this.sentinel.innerHTML = `
+      <span style="color:var(--danger)">Failed to load more</span>
+      <button class="btn btn-sm" id="sentinelRetryBtn" style="margin-left:.75rem">Retry</button>
+    `;
+    this.sentinel.querySelector('#sentinelRetryBtn')?.addEventListener('click', () => {
+      // Re-attach the observer and try again
+      this.sentinel.classList.remove('error');
+      this.sentinelObserver?.observe(this.sentinel);
+      this.handleInfiniteScroll();
+    }, { once: true });
   }
 
   async handleInfiniteScroll() {
@@ -347,50 +359,50 @@ class App {
     this.setSentinelLoading();
 
     const nextPage = this.listState.page + 1;
-    let itemsHtml = '';
-    let hasMore = false;
+    let itemsHtml  = '';
+    let hasMore    = false;
 
     try {
       switch (this.listState.type) {
         case 'home': {
           const data = await this.api.getHome(nextPage);
-          hasMore = data.pagination.hasMore;
-          itemsHtml = data.albums.map((a, i) => this.albumCard(a, i)).join('');
+          hasMore    = data.pagination.hasMore;
+          itemsHtml  = data.albums.map((a, i) => this.albumCard(a, i)).join('');
           break;
         }
         case 'search': {
           const data = await this.api.search(this.listState.params.q, nextPage);
-          hasMore = data.pagination.hasMore;
-          itemsHtml = data.albums.map((a, i) => this.albumCard(a, i)).join('');
+          hasMore    = data.pagination.hasMore;
+          itemsHtml  = data.albums.map((a, i) => this.albumCard(a, i)).join('');
           break;
         }
         case 'cosplays': {
           const data = await this.api.getCosplayCharacters(nextPage);
-          hasMore = data.pagination.hasMore;
-          itemsHtml = data.characters.map((c, i) => this.characterCard(c, i)).join('');
+          hasMore    = data.pagination.hasMore;
+          itemsHtml  = data.characters.map((c, i) => this.characterCard(c, i)).join('');
           break;
         }
         case 'character': {
           const data = await this.api.getCharacter(this.listState.params.name, nextPage);
-          hasMore = data.pagination.hasMore;
-          itemsHtml = data.albums.map((a, i) => this.albumCard(a, i)).join('');
+          hasMore    = data.pagination.hasMore;
+          itemsHtml  = data.albums.map((a, i) => this.albumCard(a, i)).join('');
           break;
         }
         case 'model': {
           const data = await this.api.getModel(this.listState.params.name, nextPage);
-          hasMore = data.pagination.hasMore;
-          itemsHtml = data.albums.map((a, i) => this.albumCard(a, i)).join('');
+          hasMore    = data.pagination.hasMore;
+          itemsHtml  = data.albums.map((a, i) => this.albumCard(a, i)).join('');
           break;
         }
         case 'fandom': {
           const data = await this.api.getFandom(this.listState.params.name, nextPage);
-          hasMore = data.pagination.hasMore;
-          itemsHtml = data.albums.map((a, i) => this.albumCard(a, i)).join('');
+          hasMore    = data.pagination.hasMore;
+          itemsHtml  = data.albums.map((a, i) => this.albumCard(a, i)).join('');
           break;
         }
       }
 
-      this.listState.page = nextPage;
+      this.listState.page    = nextPage;
       this.listState.hasMore = hasMore;
 
       const grid = this.appEl.querySelector('.grid');
@@ -410,6 +422,7 @@ class App {
       }
     } catch (e) {
       console.error(e);
+      // API retries are already exhausted at this point — show the retry button.
       this.setSentinelError();
       this.toast('Failed to load more content', 'error');
     } finally {
@@ -420,8 +433,8 @@ class App {
   /* ─── Lightbox ───────────────────────────────────────────────────────────── */
 
   openLightbox(src, index = 0) {
-    this.currentImageIndex = index;
-    this.lightboxImg.src = src;
+    this.currentImageIndex  = index;
+    this.lightboxImg.src    = src;
     this.lightbox.classList.add('active');
     document.body.style.overflow = 'hidden';
     this.updateLightboxUI();
@@ -431,16 +444,16 @@ class App {
 
   closeLightbox() {
     this.lightbox.classList.remove('active');
-    this.lightboxImg.src = '';
+    this.lightboxImg.src         = '';
     document.body.style.overflow = '';
   }
 
   prevImage() {
     if (this.galleryImages.length <= 1) return;
-    this.currentImageIndex = (this.currentImageIndex - 1 + this.galleryImages.length) % this.galleryImages.length;
+    this.currentImageIndex      = (this.currentImageIndex - 1 + this.galleryImages.length) % this.galleryImages.length;
     this.lightboxImg.style.opacity = '0.7';
     setTimeout(() => {
-      this.lightboxImg.src = this.galleryImages[this.currentImageIndex];
+      this.lightboxImg.src           = this.galleryImages[this.currentImageIndex];
       this.lightboxImg.style.opacity = '1';
     }, 100);
     this.updateLightboxUI();
@@ -449,10 +462,10 @@ class App {
 
   nextImage() {
     if (this.galleryImages.length <= 1) return;
-    this.currentImageIndex = (this.currentImageIndex + 1) % this.galleryImages.length;
+    this.currentImageIndex      = (this.currentImageIndex + 1) % this.galleryImages.length;
     this.lightboxImg.style.opacity = '0.7';
     setTimeout(() => {
-      this.lightboxImg.src = this.galleryImages[this.currentImageIndex];
+      this.lightboxImg.src           = this.galleryImages[this.currentImageIndex];
       this.lightboxImg.style.opacity = '1';
     }, 100);
     this.updateLightboxUI();
@@ -491,10 +504,10 @@ class App {
     try {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
+      const blob    = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
+      const a       = document.createElement('a');
+      a.href     = blobUrl;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
@@ -514,24 +527,24 @@ class App {
     if (!btn || btn.disabled) return;
     btn.disabled = true;
     const originalHTML = btn.innerHTML;
-    const total = this.galleryImages.length;
-    const safeName = (this.currentGalleryTitle || 'gallery').replace(/[^a-z0-9]/gi, '_').substring(0, 40);
-    let failed = 0;
+    const total        = this.galleryImages.length;
+    const safeName     = (this.currentGalleryTitle || 'gallery').replace(/[^a-z0-9]/gi, '_').substring(0, 40);
+    let failed         = 0;
 
     for (let i = 0; i < total; i++) {
-      btn.innerHTML = `<span class="dl-spinner"></span> Downloading ${i + 1}/${total}…`;
-      const url = this.galleryImages[i];
-      const ext = url.split('.').pop().split('?')[0] || 'jpg';
-      const ok = await this.downloadImage(url, `${safeName}_${String(i + 1).padStart(3, '0')}.${ext}`, true);
+      btn.innerHTML    = `<span class="dl-spinner"></span> Downloading ${i + 1}/${total}…`;
+      const url        = this.galleryImages[i];
+      const ext        = url.split('.').pop().split('?')[0] || 'jpg';
+      const ok         = await this.downloadImage(url, `${safeName}_${String(i + 1).padStart(3, '0')}.${ext}`, true);
       if (!ok) failed++;
       if (i < total - 1) await new Promise(r => setTimeout(r, 400));
     }
 
     btn.innerHTML = originalHTML;
-    btn.disabled = false;
+    btn.disabled  = false;
     this.toast(
       failed ? `Downloaded ${total - failed}/${total} images` : `All ${total} images downloaded`,
-      failed ? 'warning' : 'success'
+      failed ? 'warning' : 'success',
     );
   }
 
@@ -669,18 +682,18 @@ class App {
   async galleryView(id) {
     this.renderLoading();
     try {
-      const data = await this.api.getGallery(id);
-      const meta = data.meta;
+      const data   = await this.api.getGallery(id);
+      const meta   = data.meta;
       const images = data.allImageUrls.length ? data.allImageUrls : data.images.map(i => i.url);
 
       this.currentGalleryTitle = meta.title;
-      this.galleryImages = images.map(url => this.proxify(url));
-      this.currentImageIndex = 0;
+      this.galleryImages       = images.map(url => this.proxify(url));
+      this.currentImageIndex   = 0;
 
       const tags = [];
-      if (meta.model) tags.push(`<a href="#/model/${encodeURIComponent(meta.model.name)}" class="tag model" data-nav>${this.escapeHtml(meta.model.name)}</a>`);
+      if (meta.model)     tags.push(`<a href="#/model/${encodeURIComponent(meta.model.name)}" class="tag model" data-nav>${this.escapeHtml(meta.model.name)}</a>`);
       if (meta.character) tags.push(`<a href="#/cosplay/${encodeURIComponent(meta.character.name)}" class="tag" data-nav>${this.escapeHtml(meta.character.name)}</a>`);
-      if (meta.fandom) tags.push(`<a href="#/fandom/${encodeURIComponent(meta.fandom.name)}" class="tag fandom" data-nav>${this.escapeHtml(meta.fandom.name)}</a>`);
+      if (meta.fandom)    tags.push(`<a href="#/fandom/${encodeURIComponent(meta.fandom.name)}" class="tag fandom" data-nav>${this.escapeHtml(meta.fandom.name)}</a>`);
 
       const imagesHtml = images.length
         ? images.map((url, idx) => {
@@ -802,7 +815,7 @@ class App {
     return `
       <a href="#/cosplay/${encodeURIComponent(c.name)}" class="card char-card" data-nav style="animation-delay: ${idx * 0.05}s">
         <div class="name">${this.escapeHtml(c.name)}</div>
-        ${c.fandom ? `<div class="fandom">${this.escapeHtml(c.fandom)}</div>` : ''}
+        ${c.fandom    ? `<div class="fandom">${this.escapeHtml(c.fandom)}</div>` : ''}
         ${c.albumCount != null ? `<div class="count">${c.albumCount} albums</div>` : ''}
       </a>
     `;
@@ -817,8 +830,8 @@ class App {
   }
 
   toast(message, type = 'info', duration = 3000) {
-    const el = document.createElement('div');
-    el.className = `toast ${type}`;
+    const el      = document.createElement('div');
+    el.className  = `toast ${type}`;
     el.textContent = message;
     this.toastContainer.appendChild(el);
     setTimeout(() => {

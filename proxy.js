@@ -1,30 +1,31 @@
 /**
  * proxy.js
- * Minimal CORS proxy for api.mjs
+ * Minimal CORS proxy for the ososedki api client
  *
  * Usage:
- *   node proxy.js          # runs on port 3000
+ *   node proxy.js           # runs on port 3000
  *   PORT=8080 node proxy.js
  */
 
 import { createServer } from 'http';
-import { request } from 'https';
-import { URL } from 'url';
+import { request }      from 'https';
+import { URL }          from 'url';
 
 const PORT = process.env.PORT || 3000;
 const ALLOWED_TARGET_ORIGIN = 'https://ososedki.com';
 
 const FORWARD_REQUEST_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-  'Accept-Language': 'en-US,en;q=0.5',
-  'DNT': '1',
-  'Connection': 'keep-alive',
+  'User-Agent'               : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept'                   : 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language'          : 'en-US,en;q=0.5',
+  'DNT'                      : '1',
+  'Connection'               : 'keep-alive',
   'Upgrade-Insecure-Requests': '1',
-  'Cache-Control': 'max-age=0',
+  'Cache-Control'            : 'max-age=0',
 };
 
 function sendError(res, status, message) {
+  if (res.headersSent) return;
   res.writeHead(status, {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
@@ -36,11 +37,11 @@ const server = createServer((req, res) => {
   // ── CORS preflight ─────────────────────────────────────────────
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
-      'Access-Control-Allow-Headers': '*',
+      'Access-Control-Allow-Origin'     : '*',
+      'Access-Control-Allow-Methods'    : 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers'    : '*',
       'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Max-Age': '86400',
+      'Access-Control-Max-Age'          : '86400',
     });
     return res.end();
   }
@@ -60,7 +61,7 @@ const server = createServer((req, res) => {
 
   let targetUrl;
   try {
-    targetUrl = new URL(decodeURIComponent(targetRaw));
+    targetUrl = new URL(targetRaw);
   } catch {
     return sendError(res, 400, 'Invalid target URL');
   }
@@ -73,10 +74,11 @@ const server = createServer((req, res) => {
 
   const options = {
     hostname: targetUrl.hostname,
-    port: targetUrl.port || 443,
-    path: targetUrl.pathname + targetUrl.search,
-    method: req.method,
-    headers: FORWARD_REQUEST_HEADERS,
+    port    : targetUrl.port || 443,
+    path    : targetUrl.pathname + targetUrl.search,
+    method  : req.method,
+    headers : FORWARD_REQUEST_HEADERS,
+    timeout : 15000,
   };
 
   const proxyReq = request(options, proxyRes => {
@@ -88,9 +90,9 @@ const server = createServer((req, res) => {
     }
 
     const outHeaders = {
-      'Content-Type': headers['content-type'] || 'text/html',
+      'Content-Type'               : headers['content-type'] || 'text/html',
       'Access-Control-Allow-Origin': '*',
-      'X-Proxy-Target': targetUrl.href,
+      'X-Proxy-Target'             : targetUrl.href,
     };
 
     res.writeHead(statusCode, outHeaders);
@@ -99,7 +101,21 @@ const server = createServer((req, res) => {
       res.end();
     } else {
       proxyRes.pipe(res);
+      proxyRes.on('error', err => {
+        console.error('[proxy] upstream stream error:', err.message);
+        proxyReq.destroy();
+      });
+      res.on('error', err => {
+        console.error('[proxy] client stream error:', err.message);
+        proxyReq.destroy();
+      });
     }
+  });
+
+  proxyReq.on('timeout', () => {
+    console.error('[proxy] upstream timeout');
+    proxyReq.destroy();
+    sendError(res, 504, 'Upstream timeout');
   });
 
   proxyReq.on('error', err => {
@@ -107,10 +123,13 @@ const server = createServer((req, res) => {
     sendError(res, 502, `Proxy error: ${err.message}`);
   });
 
+  // Abort upstream if the client disconnects early
+  req.on('close', () => proxyReq.destroy());
+
   proxyReq.end();
 });
 
 server.listen(PORT, () => {
-  console.log(`✅ CORS proxy running at http://localhost:${PORT}/proxy`);
-  console.log(`   Example: http://localhost:${PORT}/proxy?url=https%3A%2F%2Fososedki.com%2F`);
+  console.log(`CORS proxy running at http://localhost:${PORT}/proxy`);
+  console.log(`Example: http://localhost:${PORT}/proxy?url=http://ososedki.com`);
 });
