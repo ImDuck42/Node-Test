@@ -3,7 +3,7 @@
  * Minimal CORS proxy for the ososedki api client
  *
  * Usage:
- *   node proxy.js           # runs HTTP on 3000, HTTPS on 3001
+ *   node proxy.js  # HTTP on 3000, HTTPS on 3001
  *   HTTPS_PORT=8080 HTTP_PORT=8081 node proxy.js
  */
 
@@ -210,8 +210,8 @@ httpsServer.listen(HTTPS_PORT, PROXY_HOST, () => {
     console.log(`    http://${ip}:${HTTP_PORT}`);
   }
   console.log('');
-  console.log('  First use of HTTPS: open the URL directly once and accept');
-  console.log('  the "not private" warning. HTTP does NOT require this.');
+  console.log('  Use of HTTPS: open the URL directly and accept the');
+  console.log('  "not private" warning. HTTP does NOT require this.');
   console.log('=====================================================================');
 });
 
